@@ -1,5 +1,5 @@
 import {parts,defaults,presets,calculate,assembly,wires} from './model.js';
-import {createScene} from './scene.js?v=2';
+import {createScene} from './scene.js?v=3';
 const $=s=>document.querySelector(s),panel=$('#panel');let tab='build',sub='assembly',selected='frame',wireIndex=0,target='',feedback='',baseline=null,flightSource='stock';let config={...defaults},mounted=new Set(),connected=new Set();
 try{const s=JSON.parse(localStorage.getItem('drone-lab-v1')||'null');if(s){for(const k of Object.keys(defaults))if(Number.isInteger(s.config?.[k])&&parts[k][s.config[k]])config[k]=s.config[k];mounted=new Set((s.mounted||[]).filter(x=>assembly.some(a=>a.id===x)));connected=new Set((s.connected||[]).filter(x=>Number.isInteger(x)&&wires[x]));}}catch{}
 const save=()=>{try{localStorage.setItem('drone-lab-v1',JSON.stringify({config,mounted:[...mounted],connected:[...connected]}));}catch{}};
