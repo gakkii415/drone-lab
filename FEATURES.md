@@ -54,3 +54,11 @@
 - Deferred or rejected items / reasons:
 - Important flows / states / data decisions:
 - Durable feature decisions:
+
+## Drone Lab decisions
+- 組み立て・配線、部品・性能、飛行テストは独立セグメント。進行ロックを設けない。
+- 配線単独でも完成機を参照表示。組み立てや配線の完了を飛行の条件にしない。
+- 飛行は完成機または選択部品構成。無効な構成は理由を表示し、完成機へ即時切替可能。
+- 左右スティックは別pointer IDで同時入力。画面離脱・モード切替・ヘルプで停止。
+- localStorageは構成と組立配線のみ保存。アクセスできなくてもメモリで利用可能。
+- 実機通信・実商品の推薦・購入・ログインは対象外。
