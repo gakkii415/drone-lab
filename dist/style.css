@@ -4,3 +4,12 @@
 @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important}}
 /* Touch targets remain large even when the visual stage is compact. */
 @media(max-width:760px){#view-tools button{min-height:44px;min-width:44px}.subtabs button{min-height:44px}}
+/* Mobile titles occupy their own row, outside the 3D canvas. */
+@media(max-width:760px){
+  #visual{display:flex;flex-direction:column}
+  #visual .view-heading{position:static;flex:none;padding:12px 20px 0;pointer-events:auto}
+  #visual .view-heading h1{font-size:22px;line-height:1.25;letter-spacing:-.4px;margin:0}
+  #visual #view-eyebrow{display:none}
+  #visual #canvas-wrap{position:relative;inset:auto;flex:1;min-height:0;width:100%}
+  #visual.flying-view .view-heading{display:none}
+}
