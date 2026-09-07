@@ -57,3 +57,10 @@
 - Deferred or rejected areas / reasons:
 - Sources / freshness / maintenance:
 - Durable content decisions:
+
+## Drone Lab model
+- 部品は架空、数値は教育用の比較。実測値や実機互換性を装わない。
+- 計算の正本は dist/model.js。固定重量60g、公称電圧14.8V、使用可能量80%、無風のホバー概算。
+- 配線は5V電源付き4-in-1 ESCと単方向UART受信の簡略構成。三相配線は束で表示。
+- 推力基礎: https://www1.grc.nasa.gov/beginners-guide-to-aeronautics/propeller-thrust/
+- 高度保持: https://ardupilot.org/copter/docs/altholdmode.html

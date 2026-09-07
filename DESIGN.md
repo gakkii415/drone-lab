@@ -361,3 +361,6 @@ Yesの場合、装飾を追加する前に、構成、情報階層、コンテ�
 - Typography / color / spacing / shape direction:
 - Motion / responsive direction:
 - Durable design decisions:
+
+## Drone Lab direction
+ユーザー提示のAppleスタイルの具体的適用は `デザイン.md` を正本とする。スマホの常時セグメント、3D作業面、独立した操作パネル。UIは白・薄灰・青い主要操作、影なし。参照の実ブラウザ閲覧と実画面スクリーンショットQAはこの実行では未実施。提供された詳細な参照文を使い、独立ソースレビューと機能モデル検証を実施した。
