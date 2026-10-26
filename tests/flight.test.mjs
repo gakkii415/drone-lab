@@ -18,24 +18,26 @@ const loadScene = new Function(
     .replace('export function createScene', 'function createScene') + '\nreturn createScene;',
 );
 
-function simulator(config = defaults) {
+function simulator(config = defaults, initialViewport = { width: 800, height: 600 }) {
   let now = 0;
   let pendingFrames = [];
+  let renderedScene, renderedCamera, resizeCallback;
+  const viewport = { ...initialViewport };
   const snapshots = [];
   class Renderer {
     shadowMap = {};
     setPixelRatio() {}
     setClearColor() {}
     setSize() {}
-    render() {}
+    render(scene, camera) { renderedScene = scene; renderedCamera = camera; }
   }
   class ResizeObserver {
-    constructor(callback) { this.callback = callback; }
+    constructor(callback) { this.callback = callback; resizeCallback = callback; }
     observe() { this.callback(); }
   }
   const canvas = {
     addEventListener() {},
-    parentElement: { getBoundingClientRect: () => ({ width: 800, height: 600 }) },
+    parentElement: { getBoundingClientRect: () => viewport },
   };
   const createScene = loadScene(
     { ...THREE, WebGLRenderer: Renderer },
@@ -49,8 +51,37 @@ function simulator(config = defaults) {
   const metrics = calculate(config);
   scene.setMode('fly');
   scene.setMetrics(metrics);
+  scene.setConfiguration(config);
+  scene.update(new Set(), '', metrics.propSize);
   return {
     scene, metrics, snapshots,
+    resize(width, height) { Object.assign(viewport, { width, height }); resizeCallback(); },
+    projectedAircraft() {
+      assert.ok(renderedScene, 'render at least one frame before measuring');
+      renderedScene.updateMatrixWorld(true);
+      renderedCamera.updateMatrixWorld(true);
+      const drone = renderedScene.getObjectByName('drone');
+      const point = new THREE.Vector3();
+      const bounds = { left: Infinity, right: -Infinity, top: Infinity, bottom: -Infinity, nearest: Infinity, farthest: -Infinity };
+      drone.traverseVisible(object => {
+        if (!object.isMesh) return;
+        const positions = object.geometry.attributes.position;
+        for (let i = 0; i < positions.count; i++) {
+          point.fromBufferAttribute(positions, i).applyMatrix4(object.matrixWorld).project(renderedCamera);
+          const x = (point.x + 1) * viewport.width / 2;
+          const y = (1 - point.y) * viewport.height / 2;
+          bounds.left = Math.min(bounds.left, x); bounds.right = Math.max(bounds.right, x);
+          bounds.top = Math.min(bounds.top, y); bounds.bottom = Math.max(bounds.bottom, y);
+          bounds.nearest = Math.min(bounds.nearest, point.z); bounds.farthest = Math.max(bounds.farthest, point.z);
+        }
+      });
+      return { ...bounds, width: bounds.right - bounds.left, height: bounds.bottom - bounds.top,
+        centerX: (bounds.left + bounds.right) / 2 / viewport.width,
+        centerY: (bounds.top + bounds.bottom) / 2 / viewport.height,
+        scale: drone.scale.toArray(),
+        parkVisible: renderedScene.getObjectByName('flight-world').visible,
+      };
+    },
     advance(seconds) {
       for (let frame = 0; frame < Math.round(seconds * 60); frame++) {
         now += 1000 / 60;
@@ -274,4 +305,53 @@ test('park scenery is finite, metre-scaled and batched for mobile rendering', ()
       assert.ok(Array.from(object.instanceMatrix.array).every(Number.isFinite));
     });
   }
+});
+
+test('mobile flight camera keeps the actual airframe readable and centred throughout flight', () => {
+  const viewports = [125, 150, 180, 220, 270].map(height => ({ width: 369, height }));
+  viewports.push({ width: 361, height: 152.390625 }, { width: 361, height: 223 });
+  for (const { width, height } of viewports) {
+    const sim = simulator(defaults, { width, height });
+    function visible(label) {
+      const p = sim.projectedAircraft();
+      const context = `${label} at ${width}×${height}: ${JSON.stringify(p)}`;
+      assert.ok(p.width >= 72 && p.width < 150, `aircraft needs a readable pixel span; ${context}`);
+      assert.ok(p.centerX > .46 && p.centerX < .54, `aircraft stays horizontally centred; ${context}`);
+      assert.ok(p.centerY > .48 && p.centerY < .62, `aircraft stays near the vertical centre; ${context}`);
+      assert.ok(p.left > 10 && p.right < width - 10 && p.top > 10 && p.bottom < height - 10, `the complete airframe stays inside the canvas; ${context}`);
+      assert.ok(p.nearest > -1 && p.farthest < 1, `the airframe stays inside camera clipping planes; ${context}`);
+      assert.deepEqual(p.scale, [.24, .24, .24], 'visibility must not enlarge the drone relative to people and trees');
+      assert.equal(p.parkVisible, true);
+    }
+    function sample(seconds, label) {
+      for (let i = 0; i < Math.round(seconds * 5); i++) { sim.advance(.2); visible(label); }
+    }
+    sim.advance(1 / 60);
+    visible('first ground frame');
+    sim.scene.start(); sample(6, 'launch and hover');
+    applyFlightInput(sim.scene, 'ry', 1); sample(2, 'forward acceleration');
+    applyFlightInput(sim.scene, 'rx', 1); sample(2, 'combined forward and lateral control');
+    applyFlightInput(sim.scene, 'lx', 1); sample(2, 'yaw while moving');
+    applyFlightInput(sim.scene, 'ly', 1); sample(1, 'combined climb and turn');
+    sim.scene.pause(); sample(.4, 'pause');
+    sim.scene.reset(); sim.advance(1 / 60); visible('reset first frame');
+    sim.scene.setMode('build'); sim.advance(1 / 60);
+    sim.scene.setMode('fly'); sim.advance(1 / 60); visible('return to flight first frame');
+  }
+});
+
+test('flight camera refits immediately when a mobile canvas changes height', () => {
+  const sim = simulator(defaults, { width: 369, height: 180 });
+  sim.scene.start(); sim.advance(5);
+  sim.scene.pause();
+  const before = sim.projectedAircraft();
+  sim.resize(369, 270); sim.advance(1 / 60);
+  const taller = sim.projectedAircraft();
+  assert.ok(Math.abs(taller.width - before.width) < 15, 'increasing canvas height must not make the airframe disproportionately large');
+  assert.ok(taller.centerY > .48 && taller.centerY < .62);
+  sim.resize(369, 180); sim.advance(1 / 60);
+  const shorter = sim.projectedAircraft();
+  assert.ok(shorter.width >= 72 && shorter.centerY < .62, 'a short canvas must retain a centred and readable aircraft immediately');
+  sim.resize(0, 0); sim.resize(369, 180); sim.advance(1 / 60);
+  assert.ok(Number.isFinite(sim.projectedAircraft().width), 'a temporarily hidden canvas must not corrupt the camera');
 });
