@@ -13,3 +13,10 @@
   #visual #canvas-wrap{position:relative;inset:auto;flex:1;min-height:0;width:100%}
   #visual.flying-view .view-heading{display:none}
 }
+
+/* Keep flight instruments readable over trees, people, and sky. */
+.flying-view #telemetry{left:12px;right:12px;top:12px;background:rgba(255,255,255,.92);border-radius:16px;padding:10px 14px;pointer-events:none}
+@media(max-width:760px){.flying-view #telemetry{top:8px;left:8px;right:8px;padding:7px 10px}.flying-view #telemetry strong{font-size:21px}.flying-view #telemetry span{font-size:10px}.flying-view #flight-toast{bottom:8px;left:12px;right:12px}}
+
+@media(max-width:760px){#visual.flying-view{height:42%;min-height:220px}}
+@media(max-height:680px) and (max-width:760px){#visual.flying-view{height:34%;min-height:180px}.flying-view #flight-toast{bottom:4px}}

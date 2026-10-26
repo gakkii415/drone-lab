@@ -4,15 +4,17 @@ import test from 'node:test';
 import * as THREE from '../dist/vendor/three.module.min.js';
 import { calculate, defaults, parts, presets } from '../dist/model.js';
 import { applyFlightInput } from '../dist/controls.js';
+import { createFlightWorld } from '../dist/world.js';
 
 // Run the production scene and physics with real Three.js geometry and math.
 // Only the browser rendering/scheduling boundary is replaced for Node.
 const sceneSource = readFileSync(new URL('../dist/scene.js', import.meta.url), 'utf8');
 assert.match(sceneSource, /import \* as T from ['"]\.\/vendor\/three\.module\.min\.js['"]/);
 const loadScene = new Function(
-  'T', 'devicePixelRatio', 'performance', 'requestAnimationFrame', 'ResizeObserver',
+  'T', 'createFlightWorld', 'devicePixelRatio', 'performance', 'requestAnimationFrame', 'ResizeObserver',
   sceneSource
     .replace(/import \* as T from ['"]\.\/vendor\/three\.module\.min\.js['"];?/, '')
+    .replace(/import \{createFlightWorld\} from ['"]\.\/world\.js\?v=\d+['"];?/, '')
     .replace('export function createScene', 'function createScene') + '\nreturn createScene;',
 );
 
@@ -21,6 +23,7 @@ function simulator(config = defaults) {
   let pendingFrames = [];
   const snapshots = [];
   class Renderer {
+    shadowMap = {};
     setPixelRatio() {}
     setClearColor() {}
     setSize() {}
@@ -36,6 +39,7 @@ function simulator(config = defaults) {
   };
   const createScene = loadScene(
     { ...THREE, WebGLRenderer: Renderer },
+    createFlightWorld,
     1,
     { now: () => now },
     callback => pendingFrames.push(callback),
@@ -241,4 +245,33 @@ test('launch, pause, land and reset publish telemetry before the next animation 
   assert.equal(snapshots.at(-1).altitude, 0);
   assert.equal(snapshots.at(-1).percent, 100);
   assert.equal(snapshots.at(-1).status, '離陸できます');
+});
+
+test('park scenery is finite, metre-scaled and batched for mobile rendering', () => {
+  const world = createFlightWorld(THREE);
+  assert.equal(world.group.visible, false, 'scenery starts hidden in assembly mode');
+  assert.ok(world.group.userData.treeCount >= 20);
+  assert.ok(world.group.userData.personCount >= 6);
+  assert.equal(world.group.userData.metres, true);
+  let meshes = 0, triangles = 0;
+  world.group.traverse(object => {
+    if (!object.isMesh) return;
+    meshes++;
+    triangles += (object.geometry.index?.count || object.geometry.attributes.position.count) / 3 * (object.isInstancedMesh ? object.count : 1);
+  });
+  assert.ok(meshes < 180, 'scenery must use instancing rather than hundreds of draw calls');
+  assert.ok(triangles < 350000, 'scenery must remain within the mobile geometry budget');
+  world.group.getObjectByName('paths').traverse(object => {
+    if (!object.isMesh || object.isInstancedMesh) return;
+    const normals = object.geometry.attributes.normal;
+    for (let i = 0; i < normals.count; i++) assert.ok(normals.getY(i) > .9, 'paths must face up');
+  });
+  for (const time of [0, 1, 30, 300]) {
+    world.update(time);
+    world.group.getObjectByName('people').traverse(object => {
+      if (!object.isInstancedMesh) return;
+      assert.ok(object.count <= object.instanceMatrix.count);
+      assert.ok(Array.from(object.instanceMatrix.array).every(Number.isFinite));
+    });
+  }
 });
