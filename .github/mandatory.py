@@ -62,8 +62,23 @@ def version_task(base, fix):
     print(f'VERSION=v{expected}')
 
 
+def entrypoint_task(base, fix):
+    expected = Path('dist/index.html').read_text(encoding='utf-8').replace(
+        '<head>', '<head><base href="./dist/">', 1)
+    path = Path('index.html')
+    if fix:
+        path.write_text(expected, encoding='utf-8')
+    elif path.read_text(encoding='utf-8') != expected:
+        raise ValueError('Pagesの入口とdistの表示・読み込み先が不一致です。--fixで同期してください。')
+
+
+def flight_tests_task(base, fix):
+    subprocess.run(['node', '--test', 'tests/controls.test.mjs', 'tests/flight.test.mjs'], check=True)
+
+
 # Add checks here. Do not remove or weaken checks just to make a failing task pass.
-TASKS = [('display-version', version_task)]
+TASKS = [('display-version', version_task), ('pages-entrypoint', entrypoint_task),
+         ('flight-regressions', flight_tests_task)]
 
 
 def main():
